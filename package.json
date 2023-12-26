@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "parcel index.html --public-url /Boid-Simulator"
+    "build": "parcel index.html --public-url /Boid-Simulation"
   },
   "author": "jmahnesmith",
   "license": "ISC",
