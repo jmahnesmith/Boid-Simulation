@@ -1,4 +1,5 @@
 # Three.js Boid Simulation
+[Link to demo](https://jmahnesmith.github.io/Boid-Simulation/)
 
 ## Overview
 
