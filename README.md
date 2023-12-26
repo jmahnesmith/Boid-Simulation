@@ -2,7 +2,7 @@
 ## Description
 This project is a 3D boid simulation built using Three.js, demonstrating complex flocking behavior of autonomous agents (boids). The simulation showcases how individual boids interact based on simple rules to create emergent patterns resembling natural flocking behavior seen in birds, fish, and other animals.
 
-The project integrates advanced features like dynamic lighting, user interactivity, and real-time control over simulation parameters through dat.GUI.
+The project integrates features like dynamic lighting, and real-time control over simulation parameters through dat.GUI.
 
 ## Features
 * Realistic Flocking Behavior: Boids move according to alignment, cohesion, and separation rules to simulate natural flocking behavior.
