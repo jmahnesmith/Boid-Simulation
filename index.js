@@ -1,14 +1,26 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Sky } from 'three/addons/objects/Sky.js';
 
-const maxSpeed = 1.0;
-const maxForce = 0.05;
+import * as dat from 'dat.gui';
 
+const gui = new dat.GUI();
+const settings = {
+    boidMinSpeed: 0,
+    boidMaxSpeed: 0.85,
+    boidMinForce: 0,
+    boidMaxForce: 0.05,
+}
+
+// Adding GUI controls for min and max speed
+gui.add(settings, 'boidMinSpeed', 0, 5).name('Min Speed').onChange(updateSpeedRange);
+gui.add(settings, 'boidMaxSpeed', 0, 5).name('Max Speed').onChange(updateSpeedRange);
+gui.add(settings, 'boidMinForce', 0, 0.25).name('Min Force').onChange(updateForceRange);
+gui.add(settings, 'boidMaxForce', 0, 0.25).name('Max Force').onChange(updateForceRange);
 
 function main() {
     // Scene setup
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
     const canvas = document.querySelector('#simulation-container');
     const renderer = setupRenderer(canvas);
     const camera = setupCamera();
@@ -16,37 +28,53 @@ function main() {
 
     // Lighting and Sky
     setupLighting(scene);
-    setupSky(scene, renderer, camera);
 
     // World bounds
     const worldBounds = 200;
     createWorldBounds(scene, worldBounds);
 
-    // Boids and Obstacles
-    const [boids, obstacles] = setupBoidsAndObstacles(scene, worldBounds);
+    // Boids
+    const boids = setupBoids(scene, worldBounds);
 
     // Render loop
     requestAnimationFrame(function render(time) {
-        updateScene(scene, time, controls, renderer, camera, obstacles, boids, worldBounds);
+        updateScene(scene, time, controls, renderer, camera, boids, worldBounds);
         renderer.render(scene, camera);
         requestAnimationFrame(render);
     }); 
 }
 
 function getRandomColor() {
-    var letters = '0123456789ABCDEF';
-    var color = '#';
-    for (var i = 0; i < 6; i++) {
-      color += letters[Math.floor(Math.random() * 16)];
-    }
+    const brightColors = [
+        0xff0000, // Red
+        0x00ff00, // Green
+        0x0000ff, // Blue
+        0xffff00, // Yellow
+        0x00ffff, // Cyan
+        0xff00ff, // Magenta
+    ];
+    const color = brightColors[Math.floor(Math.random() * brightColors.length)];
     return color;
+}
+// Ensure min speed is always less than or equal to max speed
+function updateSpeedRange() {
+    if (settings.boidMinSpeed > settings.boidMaxSpeed) {
+        settings.boidMinSpeed = settings.boidMaxSpeed;
+    }
+}
+
+// Ensure min force is always less than or equal to max speed
+function updateForceRange() {
+    if (settings.boidMinForce > settings.boidMaxForce) {
+        settings.boidMinForce = settings.boidMaxForce;
+    }
 }
 
 function makeBoidInstance(scene, color, boidGeometry, maxSpeed, minSpeed, spawnRadius) {
     const material = new THREE.MeshToonMaterial({
         color: color,
-        roughness: 0.7,
-        metalness: 0.3
+        emissive: color,
+        emissiveIntensity: 0.6
     });
 
     const boid = new THREE.Mesh(boidGeometry, material);
@@ -59,9 +87,7 @@ function makeBoidInstance(scene, color, boidGeometry, maxSpeed, minSpeed, spawnR
     spawnPoint.normalize();
     spawnPoint.multiplyScalar(Math.random() * spawnRadius);
     
-    boid.position.x = spawnPoint.x;
-    boid.position.y = spawnPoint.y;
-    boid.position.z = spawnPoint.z;
+    boid.position.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
 
     return boid;
 }
@@ -92,46 +118,12 @@ function setupControls(camera, domElement) {
 }
 
 function setupLighting(scene) {
-    const ambientLight = new THREE.AmbientLight(0x404040);
+    const ambientLight = new THREE.AmbientLight(0x606060);
     scene.add(ambientLight);
 
-    const mainLight = new THREE.DirectionalLight(0xFFFFFF, 1);
+    const mainLight = new THREE.DirectionalLight(0xFFFFFF, 1.5);
     mainLight.position.set(-1, 2, 4);
     scene.add(mainLight);
-}
-
-function setupSky(scene, renderer, camera) {
-    const sky = new Sky();
-    sky.scale.setScalar(450000);
-    scene.add(sky);
-
-    const sun = new THREE.Vector3();
-
-    // Sky and sun parameters
-    const effectController = {
-        turbidity: 6,
-        rayleigh: 0.25,
-        mieCoefficient: 0.001,
-        mieDirectionalG: 0.4,
-        elevation: 5,
-        azimuth: 0,
-        exposure: renderer.toneMappingExposure
-    };
-
-    // Update uniforms
-    const uniforms = sky.material.uniforms;
-    uniforms['turbidity'].value = effectController.turbidity;
-    uniforms['rayleigh'].value = effectController.rayleigh;
-    uniforms['mieCoefficient'].value = effectController.mieCoefficient;
-    uniforms['mieDirectionalG'].value = effectController.mieDirectionalG;
-
-    const phi = THREE.MathUtils.degToRad(90 - effectController.elevation);
-    const theta = THREE.MathUtils.degToRad(effectController.azimuth);
-    sun.setFromSphericalCoords(1, phi, theta);
-
-    uniforms['sunPosition'].value.copy(sun);
-    renderer.toneMappingExposure = effectController.exposure;
-    renderer.render(scene, camera);
 }
 
 function createWorldBounds(scene, worldBounds) {
@@ -143,53 +135,24 @@ function createWorldBounds(scene, worldBounds) {
     scene.add(mesh);
 }
 
-function setupBoidsAndObstacles(scene, worldBounds) {
+function setupBoids(scene, worldBounds) {
     // Boid parameters
     const boidRadius = 1.0;
     const boidHeight = 3.3;
     const radialSegments = 9;
     const boidGeometry = new THREE.ConeGeometry(boidRadius, boidHeight, radialSegments).rotateX(Math.PI / 2);
 
-    // Obstacle parameters
-    const obstacleRadius = 1;  
-    const obstacleDetail = 1;  
-    const obstacleGeometry = new THREE.IcosahedronGeometry(obstacleRadius, obstacleDetail);
-
-    // Common parameters for boids and obstacles
-    const maxSpeed = 1.0;
-    const minSpeed = 0.5;
+    // Common parameters for boids
     const spawnRadius = worldBounds / 2;
     const numberOfBoids = 500;
-    const numberOfObstacles = 5;
 
     // Create boids
     let boids = [];
     for (let i = 0; i < numberOfBoids; i++) {
-        boids.push(makeBoidInstance(scene, getRandomColor(), boidGeometry, maxSpeed, minSpeed, spawnRadius));
+        boids.push(makeBoidInstance(scene, getRandomColor(), boidGeometry, settings.boidMaxSpeed, settings.boidMinSpeed, spawnRadius));
     }
 
-    // Create obstacles
-    let obstacles = [];
-    for (let i = 0; i < numberOfObstacles; i++) {
-        obstacles.push(makeObstacleInstance(scene, getRandomColor(), obstacleGeometry, obstacleRadius, worldBounds));
-    }
-
-    return [boids, obstacles];
-}
-
-function makeObstacleInstance(scene, color, obstacleGeometry, radius, worldBounds) {
-    const material = new THREE.MeshToonMaterial({ color });
-    const obstacle = new THREE.Mesh(obstacleGeometry, material);
-    obstacle.scale.multiplyScalar(radius);
-    obstacle.userData.radius = radius;
-    obstacle.userData.phase = Math.random() * Math.PI * 2;
-    scene.add(obstacle);
-
-    const x = Math.random() * worldBounds - worldBounds / 2;
-    const z = Math.random() * worldBounds - worldBounds / 2;
-    obstacle.position.set(x, Math.sin(obstacle.userData.phase) * worldBounds / 2, z);
-
-    return obstacle;
+    return boids;
 }
 
 function align(boid, boids, perceptionRadius) {
@@ -205,9 +168,9 @@ function align(boid, boids, perceptionRadius) {
     if (total > 0) {
         steering.divideScalar(total);
         steering.normalize();
-        steering.multiplyScalar(maxSpeed);
+        steering.multiplyScalar(settings.boidMaxSpeed);
         steering.sub(boid.userData.velocity);
-        steering.clampLength(0, maxForce);
+        steering.clampLength(0, settings.boidMaxForce);
     }
     return steering;
 }
@@ -226,9 +189,9 @@ function cohesion(boid, boids, perceptionRadius) {
         steering.divideScalar(total);
         steering.sub(boid.position);
         steering.normalize();
-        steering.multiplyScalar(maxSpeed);
+        steering.multiplyScalar(settings.boidMaxSpeed);
         steering.sub(boid.userData.velocity);
-        steering.clampLength(0, maxForce);
+        steering.clampLength(0, settings.boidMaxForce);
     }
     return steering;
 }
@@ -248,14 +211,14 @@ function separation(boid, boids, perceptionRadius) {
     if (total > 0) {
         steering.divideScalar(total);
         steering.normalize();
-        steering.multiplyScalar(maxSpeed);
+        steering.multiplyScalar(settings.boidMaxSpeed);
         steering.sub(boid.userData.velocity);
-        steering.clampLength(0, maxForce);
+        steering.clampLength(0, settings.boidMaxForce);
     }
     return steering;
 }
 
-function updateScene(scene, time, controls, renderer, camera, obstacles, boids, worldBounds) {
+function updateScene(scene, time, controls, renderer, camera, boids, worldBounds) {
     time *= 0.001;
     controls.update();
 
@@ -277,29 +240,40 @@ function updateScene(scene, time, controls, renderer, camera, obstacles, boids, 
 
         boid.position.add(boid.userData.velocity);
 
-        wrapAround(boid, worldBounds / 2);
+        wrapAround(boid, worldBounds / 2, boid.position);
 
         boid.lookAt(boid.position.clone().add(boid.userData.velocity));
-    });
-
-    // Update obstacles - Example: making them move or change over time
-    obstacles.forEach((obstacle) => {
-        // Example: Oscillating the obstacles in the y-axis
-        obstacle.position.y = Math.sin(obstacle.userData.phase + time) * 50; 
     });
 
     renderer.render(scene, camera);
 }
 
 function wrapAround(boid, boundary) {
-    if (boid.position.x > boundary) boid.position.x = -boundary;
-    else if (boid.position.x < -boundary) boid.position.x = boundary;
+    let wrapped = false;
 
-    if (boid.position.y > boundary) boid.position.y = -boundary;
-    else if (boid.position.y < -boundary) boid.position.y = boundary;
+    if (boid.position.x > boundary) {
+        boid.position.x = -boundary;
+        wrapped = true;
+    } else if (boid.position.x < -boundary) {
+        boid.position.x = boundary;
+        wrapped = true;
+    }
 
-    if (boid.position.z > boundary) boid.position.z = -boundary;
-    else if (boid.position.z < -boundary) boid.position.z = boundary;
+    if (boid.position.y > boundary) {
+        boid.position.y = -boundary;
+        wrapped = true;
+    } else if (boid.position.y < -boundary) {
+        boid.position.y = boundary;
+        wrapped = true;
+    }
+
+    if (boid.position.z > boundary) {
+        boid.position.z = -boundary;
+        wrapped = true;
+    } else if (boid.position.z < -boundary) {
+        boid.position.z = boundary;
+        wrapped = true;
+    }
 }
 
 function resizeRendererToDisplaySize(renderer) {
